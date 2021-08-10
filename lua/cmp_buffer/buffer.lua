@@ -99,7 +99,7 @@ function buffer.index_line(self, i, line)
     local s, e = self:matchstrpos(buf)
     if s then
       local word = string.sub(buf, s, e - 1)
-      if #word > 1 and string.match(word, '%a$') then
+      if #word > 1 and string.match(word, '[%a%d]$') then
         table.insert(words, word)
       end
     end

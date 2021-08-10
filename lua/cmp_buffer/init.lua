@@ -28,11 +28,12 @@ source.complete = function(self, request, callback)
   end
 
   vim.defer_fn(vim.schedule_wrap(function()
+    local input = string.sub(request.context.cursor_before_line, request.offset)
     local items = {}
     local words = {}
     for _, buf in ipairs(self:_get_buffers(request)) do
       for _, word in ipairs(buf:get_words()) do
-        if not words[word] then
+        if not words[word] and input ~= word then
           words[word] = true
           table.insert(items, {
             label = word,
