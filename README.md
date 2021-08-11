@@ -2,19 +2,19 @@
 
 nvim-cmp source for buffer words.
 
-# configuration
+# Configuration
 
 The below source configuration are available.
 
 
-### keyword_pattern _Type: string_
+### keyword_pattern (type: string)
 
 _Default: [[\%(-\?\d\+\%(\.\d\+\)\?\|\h\w*\%([\-.]\w*\)*\)]]_
 
 A vim's regular expression for creating a word list from buffer content.
 
 
-### get_bufnrs _Type: fun(): number[]_
+### get_bufnrs (type: fun(): number[])
 
 _Default: function() return { vim.api.nvim_get_current_buf() } end_
 
@@ -22,7 +22,7 @@ A function that specifies the buffer numbers to complete.
 
 You can use the following pre-defined recipes.
 
-##### All buffers.
+##### All buffers
 
 ```lua
 get_bufnrs = function()
