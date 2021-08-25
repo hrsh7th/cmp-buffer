@@ -1,7 +1,7 @@
 local buffer = require('cmp_buffer.buffer')
 
 local defaults = {
-  keyword_pattern = [[\%(-\?\d\+\%(\.\d\+\)\?\|\h\w*\%([\-]\w*\)*\)]],
+  keyword_pattern = [[\%(-\?\d\+\%(\.\d\+\)\?\|\h\w*\%([\-]\h\w*\)*\)]],
   get_bufnrs = function()
     return { vim.api.nvim_get_current_buf() }
   end,
@@ -15,23 +15,23 @@ source.new = function()
   return self
 end
 
-source.complete = function(self, request, callback)
-  request.option = vim.tbl_deep_extend('keep', request.option, defaults)
+source.complete = function(self, params, callback)
+  params.option = vim.tbl_deep_extend('keep', params.option, defaults)
   vim.validate({
-    keyword_pattern = { request.option.keyword_pattern, 'string', '`opts.keyword_pattern` must be `string`' },
-    get_bufnrs = { request.option.get_bufnrs, 'function', '`opts.get_bufnrs` must be `function`' },
+    keyword_pattern = { params.option.keyword_pattern, 'string', '`opts.keyword_pattern` must be `string`' },
+    get_bufnrs = { params.option.get_bufnrs, 'function', '`opts.get_bufnrs` must be `function`' },
   })
 
   local processing = false
-  for _, buf in ipairs(self:_get_buffers(request)) do
+  for _, buf in ipairs(self:_get_buffers(params)) do
     processing = processing or buf.processing
   end
 
   vim.defer_fn(vim.schedule_wrap(function()
-    local input = string.sub(request.context.cursor_before_line, request.offset)
+    local input = string.sub(params.context.cursor_before_line, params.offset)
     local items = {}
     local words = {}
-    for _, buf in ipairs(self:_get_buffers(request)) do
+    for _, buf in ipairs(self:_get_buffers(params)) do
       for _, word in ipairs(buf:get_words()) do
         if not words[word] and input ~= word then
           words[word] = true
@@ -51,11 +51,11 @@ source.complete = function(self, request, callback)
 end
 
 --- _get_bufs
-source._get_buffers = function(self, request)
+source._get_buffers = function(self, params)
   local buffers = {}
-  for _, bufnr in ipairs(request.option.get_bufnrs()) do
+  for _, bufnr in ipairs(params.option.get_bufnrs()) do
     if not self.buffers[bufnr] then
-      local new_buf = buffer.new(bufnr, request.option.keyword_pattern)
+      local new_buf = buffer.new(bufnr, params.option.keyword_pattern)
       new_buf:index()
       new_buf:watch()
       self.buffers[bufnr] = new_buf
