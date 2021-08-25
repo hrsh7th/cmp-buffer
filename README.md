@@ -2,6 +2,16 @@
 
 nvim-cmp source for buffer words.
 
+# Setup
+
+```lua
+require'cmp'.setup {
+  sources = {
+    { name = 'buffer' }
+  }
+}
+```
+
 # Configuration
 
 The below source configuration are available.
