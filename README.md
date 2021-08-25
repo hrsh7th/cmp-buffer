@@ -26,7 +26,7 @@ You can use the following pre-defined recipes.
 
 ```lua
 get_bufnrs = function()
-  return vim.api.nvim_list_bufs()()
+  return vim.api.nvim_list_bufs()
 end
 ```
 
