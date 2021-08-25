@@ -1,7 +1,7 @@
 local buffer = require('cmp_buffer.buffer')
 
 local defaults = {
-  keyword_pattern = [[\%(-\?\d\+\%(\.\d\+\)\?\|\h\w*\%([\-]\h\w*\)*\)]],
+  keyword_pattern = [[\%(-\?\d\+\%(\.\d\+\)\?\|\h\w*\%([\-]\w*\)*\)]],
   get_bufnrs = function()
     return { vim.api.nvim_get_current_buf() }
   end,
