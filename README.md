@@ -19,14 +19,16 @@ The below source configuration are available.
 
 ### keyword_pattern (type: string)
 
-_Default: [[\%(-\?\d\+\%(\.\d\+\)\?\|\h\w*\%([\-.]\w*\)*\)]]_
+_Default:_ `[[\%(-\?\d\+\%(\.\d\+\)\?\|\h\w*\%([\-.]\w*\)*\)]]`
 
 A vim's regular expression for creating a word list from buffer content.
+
+You can set this to `\k\+` if you want to use the `iskeyword` option for recognizing words.
 
 
 ### get_bufnrs (type: fun(): number[])
 
-_Default: function() return { vim.api.nvim_get_current_buf() } end_
+_Default:_ `function() return { vim.api.nvim_get_current_buf() } end`
 
 A function that specifies the buffer numbers to complete.
 
@@ -51,4 +53,3 @@ get_bufnrs = function()
   return vim.tbl_keys(bufs)
 end
 ```
-
