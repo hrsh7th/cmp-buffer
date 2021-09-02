@@ -43,9 +43,11 @@ function buffer.index(self)
     200,
     vim.schedule_wrap(function()
       local chunk = math.min(index + 1000, #lines)
-      for i = index, chunk do
-        self:index_line(i, lines[i] or '')
-      end
+      vim.api.nvim_buf_call(self.bufnr, function()
+        for i = index, chunk do
+          self:index_line(i, lines[i] or '')
+        end
+      end)
       index = chunk + 1
 
       if chunk >= #lines then
@@ -81,11 +83,13 @@ function buffer.watch(self)
 
       -- replace lines
       local lines = vim.api.nvim_buf_get_lines(self.bufnr, firstline, new_lastline, false)
-      for i, line in ipairs(lines) do
-        if line then
-          self:index_line(firstline + i, line or '')
+      vim.api.nvim_buf_call(self.bufnr, function()
+        for i, line in ipairs(lines) do
+          if line then
+            self:index_line(firstline + i, line or '')
+          end
         end
-      end
+      end)
     end),
   })
 end
