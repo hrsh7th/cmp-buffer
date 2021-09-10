@@ -145,7 +145,17 @@ function buffer.watch(self)
 
       local delta = new_last_line - old_last_line
       local new_lines_count = self.lines_count + delta
-      if delta > 0 then -- append
+      if new_lines_count == 0 then  -- clear
+        -- This branch protects against bugs after full-file deletion. If you
+        -- do, for example, gdGG, the new_last_line of the event will be zero.
+        -- Which is not true, a buffer always contains at least one empty line,
+        -- only unloaded buffers contain zero lines.
+        new_lines_count = 1
+        for i = self.lines_count, 2, -1 do
+          self.lines_words[i] = nil
+        end
+        self.lines_words[1] = {}
+      elseif delta > 0 then -- append
         -- Explicitly reserve more slots in the array part of the lines table,
         -- all of them will be filled in the next loop, but in reverse order
         -- (which is why I am concerned about preallocation). Why is there no
