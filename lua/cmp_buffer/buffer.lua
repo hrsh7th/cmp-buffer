@@ -9,7 +9,8 @@
 ---@field public lines_words table<number, string[]>
 ---@field public unique_words table<string, boolean>
 ---@field public unique_words_dirty boolean
----@field public processing boolean
+---@field public closed boolean
+---@field public on_close_cb fun()|nil
 local buffer = {}
 
 ---Create new buffer object
@@ -32,63 +33,78 @@ function buffer.new(bufnr, length, pattern, indexing_chunk_size, indexing_interv
   self.lines_words = {}
   self.unique_words = {}
   self.unique_words_dirty = true
-  self.processing = false
+  self.closed = false
+  self.on_close_cb = nil
   return self
 end
 
 ---Close buffer
 function buffer.close(self)
-  if self.timer then
-    self.timer:stop()
-    self.timer:close()
-    self.timer = nil
-  end
+  self.closed = true
+  self:stop_indexing_timer()
   self.lines_count = 0
   self.lines_words = {}
   self.unique_words = {}
   self.unique_words_dirty = false
+  if self.on_close_cb then
+    self.on_close_cb()
+  end
+end
+
+function buffer.stop_indexing_timer(self)
+  if self.timer and not self.timer:is_closing() then
+    self.timer:stop()
+    self.timer:close()
+  end
+  self.timer = nil
 end
 
 ---Indexing buffer
 function buffer.index(self)
-  self.processing = true
-
   self.lines_count = vim.api.nvim_buf_line_count(self.bufnr)
-  local chunk_max_size = self.indexing_chunk_size
-  if chunk_max_size < 1 then
-    -- Index all lines in one go.
-    chunk_max_size = self.lines_count
-  end
-  local chunk_start = 0
+  -- NOTE: Pre-allocating self.lines_words here somehow wastes more memory, and
+  -- not doing that doesn't have a visible effect on performance. Win-win.
+  -- for i = 1, self.lines_count do
+  --   self.lines_words[i] = {}
+  -- end
 
   if self.indexing_interval <= 0 then
-    -- sync algorithm
-
-    vim.api.nvim_buf_call(self.bufnr, function()
-      while chunk_start < self.lines_count do
-        local chunk_end = math.min(chunk_start + chunk_max_size, self.lines_count)
-        -- For some reason requesting line arrays multiple times in chunks
-        -- leads to much better memory usage than doing that in one big array,
-        -- which is why the sync algorithm has better memory usage than the
-        -- async one.
-        local chunk_lines = vim.api.nvim_buf_get_lines(self.bufnr, chunk_start, chunk_end, true)
-        for linenr = chunk_start + 1, chunk_end do
-          self.lines_words[linenr] = {}
-          self:index_line(linenr, chunk_lines[linenr - chunk_start])
-        end
-        chunk_start = chunk_end
-      end
-    end)
-
-    self:rebuild_unique_words()
-
-    self.processing = false
-    return
+    self:index_range(0, self.lines_count, self.indexing_chunk_size)
+    self.unique_words_dirty = true
+  else
+    self:index_range_async(0, self.lines_count, self.indexing_chunk_size)
   end
+end
 
-  -- async algorithm
+--- sync algorithm
+function buffer.index_range(self, range_start, range_end, chunk_size)
+  vim.api.nvim_buf_call(self.bufnr, function()
+    if chunk_size < 1 then
+      chunk_size = range_end - range_start
+    end
+    local chunk_start = range_start
+    while chunk_start < range_end do
+      local chunk_end = math.min(chunk_start + chunk_size, range_end)
+      -- For some reason requesting line arrays multiple times in chunks leads
+      -- to much better memory usage than doing that in one big array, which is
+      -- why the sync algorithm has better memory usage than the async one.
+      local chunk_lines = vim.api.nvim_buf_get_lines(self.bufnr, chunk_start, chunk_end, true)
+      for i, line in ipairs(chunk_lines) do
+        self:index_line(chunk_start + i, line)
+      end
+      chunk_start = chunk_end
+    end
+  end)
+end
 
-  local lines = vim.api.nvim_buf_get_lines(self.bufnr, 0, -1, true)
+--- async algorithm
+function buffer.index_range_async(self, range_start, range_end, chunk_size)
+  if chunk_size < 1 then
+    chunk_size = range_end - range_start
+  end
+  local chunk_start = range_start
+
+  local lines = vim.api.nvim_buf_get_lines(self.bufnr, range_start, range_end, true)
   -- This flag prevents vim.schedule() callbacks from piling up in the queue
   -- when the indexing interval is very short.
   local scheduled = false
@@ -101,30 +117,25 @@ function buffer.index(self)
     scheduled = true
     vim.schedule(function()
       scheduled = false
+      if self.closed then
+        return
+      end
 
-      local chunk_end = math.min(chunk_start + chunk_max_size, self.lines_count)
+      local chunk_end = math.min(chunk_start + chunk_size, range_end)
       vim.api.nvim_buf_call(self.bufnr, function()
         for linenr = chunk_start + 1, chunk_end do
-          self.lines_words[linenr] = {}
           self:index_line(linenr, lines[linenr])
         end
       end)
       chunk_start = chunk_end
+      self.unique_words_dirty = true
 
-      if chunk_end >= self.lines_count then
-        if self.timer then
-          self.timer:stop()
-          self.timer:close()
-          self.timer = nil
-        end
-        self.processing = false
+      if chunk_end >= range_end then
+        self:stop_indexing_timer()
       end
     end)
   end)
 end
-
--- See below.
-local shared_marker_table_for_preallocation = {}
 
 --- watch
 function buffer.watch(self)
@@ -139,7 +150,7 @@ function buffer.watch(self)
   vim.api.nvim_buf_attach(self.bufnr, false, {
     -- NOTE: line indexes are 0-based and the last line is not inclusive.
     on_lines = function(_, _, _, first_line, old_last_line, new_last_line, _, _, _)
-      if not vim.api.nvim_buf_is_loaded(self.bufnr) then
+      if self.closed then
         return true
       end
 
@@ -161,7 +172,7 @@ function buffer.watch(self)
         -- (which is why I am concerned about preallocation). Why is there no
         -- built-in function to do this in Lua???
         for i = self.lines_count + 1, new_lines_count do
-          self.lines_words[i] = shared_marker_table_for_preallocation
+          self.lines_words[i] = vim.NIL
         end
         -- Move forwards the unchanged elements in the tail part.
         for i = self.lines_count, old_last_line + 1, -1 do
@@ -185,17 +196,39 @@ function buffer.watch(self)
       self.lines_count = new_lines_count
 
       -- replace lines
-      local lines = vim.api.nvim_buf_get_lines(self.bufnr, first_line, new_last_line, true)
-      vim.api.nvim_buf_call(self.bufnr, function()
-        for i, line in ipairs(lines) do
-          self:index_line(first_line + i, line)
-        end
-      end)
-
+      self:index_range(first_line, new_last_line, self.indexing_chunk_size)
       self.unique_words_dirty = true
     end,
 
-    on_detach = function(_)
+    on_reload = function(_, _)
+      if self.closed then
+        return true
+      end
+
+      -- The logic for adjusting lines list on buffer reloads is much simpler
+      -- because all line tables can be assumed to be fresh.
+      local new_lines_count = vim.api.nvim_buf_line_count(self.bufnr)
+      if new_lines_count > self.lines_count then -- append
+        -- Again, no need to pre-allocate, index_line will append new lines
+        -- itself.
+        -- for i = self.lines_count + 1, new_lines_count do
+        --   self.lines_words[i] = {}
+        -- end
+      elseif new_lines_count < self.lines_count then -- remove
+        for i = self.lines_count, new_lines_count + 1, -1 do
+          self.lines_words[i] = nil
+        end
+      end
+      self.lines_count = new_lines_count
+
+      self:index_range(0, self.lines_count, self.indexing_chunk_size)
+      self.unique_words_dirty = true
+    end,
+
+    on_detach = function(_, _)
+      if self.closed then
+        return true
+      end
       self:close()
     end,
   })
@@ -206,8 +239,13 @@ end
 ---@param line string
 function buffer.index_line(self, linenr, line)
   local words = self.lines_words[linenr]
-  for k, _ in ipairs(words) do
-    words[k] = nil
+  if not words then
+    words = {}
+    self.lines_words[linenr] = words
+  else
+    for k, _ in ipairs(words) do
+      words[k] = nil
+    end
   end
   local word_i = 1
 

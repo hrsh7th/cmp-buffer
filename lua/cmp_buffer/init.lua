@@ -40,7 +40,10 @@ source.complete = function(self, params, callback)
   local processing = false
   local bufs = self:_get_buffers(params)
   for _, buf in ipairs(bufs) do
-    processing = processing or buf.processing
+    if buf.timer then
+      processing = true
+      break
+    end
   end
 
   vim.defer_fn(function()
@@ -78,6 +81,9 @@ source._get_buffers = function(self, params)
         params.option.indexing_chunk_size,
         params.option.indexing_interval
       )
+      new_buf.on_close_cb = function()
+        self.buffers[bufnr] = nil
+      end
       new_buf:index()
       new_buf:watch()
       self.buffers[bufnr] = new_buf
