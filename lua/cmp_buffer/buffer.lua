@@ -7,8 +7,12 @@
 ---@field public indexing_interval number
 ---@field public timer any|nil
 ---@field public lines_words table<number, string[]>
----@field public unique_words table<string, boolean>
----@field public unique_words_dirty boolean
+---@field public unique_words_curr_line table<string, boolean>
+---@field public unique_words_other_lines table<string, boolean>
+---@field public unique_words_curr_line_dirty boolean
+---@field public unique_words_other_lines_dirty boolean
+---@field public last_edit_first_line number
+---@field public last_edit_last_line number
 ---@field public closed boolean
 ---@field public on_close_cb fun()|nil
 local buffer = {}
@@ -22,19 +26,28 @@ local buffer = {}
 ---@return cmp_buffer.Buffer
 function buffer.new(bufnr, length, pattern, indexing_chunk_size, indexing_interval)
   local self = setmetatable({}, { __index = buffer })
+
   self.bufnr = bufnr
+  self.timer = nil
+  self.closed = false
+  self.on_close_cb = nil
+
   self.regex = vim.regex(pattern)
   self.length = length
   self.pattern = pattern
   self.indexing_chunk_size = indexing_chunk_size
   self.indexing_interval = indexing_interval
-  self.timer = nil
+
   self.lines_count = 0
   self.lines_words = {}
-  self.unique_words = {}
-  self.unique_words_dirty = true
-  self.closed = false
-  self.on_close_cb = nil
+
+  self.unique_words_curr_line = {}
+  self.unique_words_other_lines = {}
+  self.unique_words_curr_line_dirty = true
+  self.unique_words_other_lines_dirty = true
+  self.last_edit_first_line = 0
+  self.last_edit_last_line = 0
+
   return self
 end
 
@@ -42,10 +55,17 @@ end
 function buffer.close(self)
   self.closed = true
   self:stop_indexing_timer()
+
   self.lines_count = 0
   self.lines_words = {}
-  self.unique_words = {}
-  self.unique_words_dirty = false
+
+  self.unique_words_curr_line = {}
+  self.unique_words_other_lines = {}
+  self.unique_words_curr_line_dirty = false
+  self.unique_words_other_lines_dirty = false
+  self.last_edit_first_line = 0
+  self.last_edit_last_line = 0
+
   if self.on_close_cb then
     self.on_close_cb()
   end
@@ -59,6 +79,13 @@ function buffer.stop_indexing_timer(self)
   self.timer = nil
 end
 
+function buffer.mark_all_lines_dirty(self)
+  self.unique_words_curr_line_dirty = true
+  self.unique_words_other_lines_dirty = true
+  self.last_edit_first_line = 0
+  self.last_edit_last_line = 0
+end
+
 ---Indexing buffer
 function buffer.index(self)
   self.lines_count = vim.api.nvim_buf_line_count(self.bufnr)
@@ -70,7 +97,7 @@ function buffer.index(self)
 
   if self.indexing_interval <= 0 then
     self:index_range(0, self.lines_count, self.indexing_chunk_size)
-    self.unique_words_dirty = true
+    self:mark_all_lines_dirty()
   else
     self:index_range_async(0, self.lines_count, self.indexing_chunk_size)
   end
@@ -128,7 +155,7 @@ function buffer.index_range_async(self, range_start, range_end, chunk_size)
         end
       end)
       chunk_start = chunk_end
-      self.unique_words_dirty = true
+      self:mark_all_lines_dirty()
 
       if chunk_end >= range_end then
         self:stop_indexing_timer()
@@ -155,14 +182,15 @@ function buffer.watch(self)
       end
 
       local delta = new_last_line - old_last_line
-      local new_lines_count = self.lines_count + delta
-      if new_lines_count == 0 then  -- clear
+      local old_lines_count = self.lines_count
+      local new_lines_count = old_lines_count + delta
+      if new_lines_count == 0 then -- clear
         -- This branch protects against bugs after full-file deletion. If you
         -- do, for example, gdGG, the new_last_line of the event will be zero.
         -- Which is not true, a buffer always contains at least one empty line,
         -- only unloaded buffers contain zero lines.
         new_lines_count = 1
-        for i = self.lines_count, 2, -1 do
+        for i = old_lines_count, 2, -1 do
           self.lines_words[i] = nil
         end
         self.lines_words[1] = {}
@@ -171,11 +199,11 @@ function buffer.watch(self)
         -- all of them will be filled in the next loop, but in reverse order
         -- (which is why I am concerned about preallocation). Why is there no
         -- built-in function to do this in Lua???
-        for i = self.lines_count + 1, new_lines_count do
+        for i = old_lines_count + 1, new_lines_count do
           self.lines_words[i] = vim.NIL
         end
         -- Move forwards the unchanged elements in the tail part.
-        for i = self.lines_count, old_last_line + 1, -1 do
+        for i = old_lines_count, old_last_line + 1, -1 do
           self.lines_words[i + delta] = self.lines_words[i]
         end
         -- Fill in new tables for the added lines.
@@ -184,12 +212,12 @@ function buffer.watch(self)
         end
       elseif delta < 0 then -- remove
         -- Move backwards the unchanged elements in the tail part.
-        for i = old_last_line + 1, self.lines_count do
+        for i = old_last_line + 1, old_lines_count do
           self.lines_words[i + delta] = self.lines_words[i]
         end
         -- Remove (already copied) tables from the end, in reverse order, so
         -- that we don't make holes in the lines table.
-        for i = self.lines_count, new_lines_count + 1, -1 do
+        for i = old_lines_count, new_lines_count + 1, -1 do
           self.lines_words[i] = nil
         end
       end
@@ -197,7 +225,15 @@ function buffer.watch(self)
 
       -- replace lines
       self:index_range(first_line, new_last_line, self.indexing_chunk_size)
-      self.unique_words_dirty = true
+
+      if first_line == self.last_edit_first_line and old_last_line == self.last_edit_last_line and new_lines_count - new_last_line == old_lines_count - self.last_edit_last_line then
+        self.unique_words_curr_line_dirty = true
+      else
+        self.unique_words_curr_line_dirty = true
+        self.unique_words_other_lines_dirty = true
+      end
+      self.last_edit_first_line = first_line
+      self.last_edit_last_line = new_last_line
     end,
 
     on_reload = function(_, _)
@@ -222,7 +258,7 @@ function buffer.watch(self)
       self.lines_count = new_lines_count
 
       self:index_range(0, self.lines_count, self.indexing_chunk_size)
-      self.unique_words_dirty = true
+      self:mark_all_lines_dirty()
     end,
 
     on_detach = function(_, _)
@@ -272,23 +308,33 @@ function buffer.get_words(self)
   -- NOTE: unique_words are rebuilt on-demand because it is common for the
   -- watcher callback to be fired VERY frequently, and a rebuild needs to go
   -- over ALL lines, not just the changed ones.
-  if self.unique_words_dirty then
-    self:rebuild_unique_words()
+  if self.unique_words_other_lines_dirty then
+    local words = self.unique_words_other_lines
+    for w, _ in pairs(words) do
+      words[w] = nil
+    end
+    self:rebuild_unique_words(words, 0, self.last_edit_first_line)
+    self:rebuild_unique_words(words, self.last_edit_last_line, self.lines_count)
+    self.unique_words_other_lines_dirty = false
   end
-  return self.unique_words
+  if self.unique_words_curr_line_dirty and self.unique_words_curr_line_dirty then
+    local words = self.unique_words_curr_line
+    for w, _ in pairs(words) do
+      words[w] = nil
+    end
+    self:rebuild_unique_words(words, self.last_edit_first_line, self.last_edit_last_line)
+    self.unique_words_curr_line_dirty = false
+  end
+  return { self.unique_words_other_lines, self.unique_words_curr_line }
 end
 
 --- rebuild_unique_words
-function buffer.rebuild_unique_words(self)
-  for w, _ in pairs(self.unique_words) do
-    self.unique_words[w] = nil
-  end
-  for _, line in ipairs(self.lines_words) do
-    for _, w in ipairs(line) do
-      self.unique_words[w] = true
+function buffer.rebuild_unique_words(self, words_table, range_start, range_end)
+  for i = range_start + 1, range_end do
+    for _, w in ipairs(self.lines_words[i]) do
+      words_table[w] = true
     end
   end
-  self.unique_words_dirty = false
 end
 
 return buffer
