@@ -1,6 +1,6 @@
 ---@class cmp_buffer.Buffer
 ---@field public bufnr number
----@field public regexes any[]
+---@field public regex any
 ---@field public length number
 ---@field public pattern string
 ---@field public timer any|nil
@@ -16,7 +16,7 @@ local buffer = {}
 function buffer.new(bufnr, length, pattern)
   local self = setmetatable({}, { __index = buffer })
   self.bufnr = bufnr
-  self.regexes = {}
+  self.regex = vim.regex(pattern)
   self.length = length
   self.pattern = pattern
   self.timer = nil
@@ -97,27 +97,30 @@ function buffer.watch(self)
   })
 end
 
---- add_words
-function buffer.index_line(self, i, line)
+---@param linenr number
+---@param line string
+function buffer.index_line(self, linenr, line)
   local words = {}
+  local word_i = 1
 
-  local buf = line
-  while true do
-    local s, e = self:matchstrpos(buf)
-    if s then
-      local word = string.sub(buf, s, e - 1)
+  local remaining = line
+  while #remaining > 0 do
+    -- NOTE: Both start and end indexes here are 0-based (unlike Lua strings),
+    -- and the end index is not inclusive.
+    local match_start, match_end = self.regex:match_str(remaining)
+    if match_start and match_end then
+      local word = remaining:sub(match_start + 1, match_end)
       if #word >= self.length then
-        table.insert(words, word)
+        words[word_i] = word
+        word_i = word_i + 1
       end
-    end
-    local new_buffer = string.sub(buf, e and e + 1 or 2)
-    if buf == new_buffer then
+      remaining = remaining:sub(match_end + 1)
+    else
       break
     end
-    buf = new_buffer
   end
 
-  self.words[i] = words
+  self.words[linenr] = words
 end
 
 --- get_words
@@ -129,21 +132,6 @@ function buffer.get_words(self)
     end
   end
   return words
-end
-
---- matchstrpos
-function buffer.matchstrpos(self, text)
-  local s, e = self:regex(self.pattern):match_str(text)
-  if s == nil then
-    return nil, nil
-  end
-  return s + 1, e + 1
-end
-
---- regex
-function buffer.regex(self, pattern)
-  self.regexes[pattern] = self.regexes[pattern] or vim.regex(pattern)
-  return self.regexes[pattern]
 end
 
 return buffer
