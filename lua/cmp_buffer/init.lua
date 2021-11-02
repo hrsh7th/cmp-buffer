@@ -6,6 +6,8 @@ local defaults = {
   get_bufnrs = function()
     return { vim.api.nvim_get_current_buf() }
   end,
+  indexing_chunk_size = 1000,
+  indexing_interval = 200,
 }
 
 local source = {}
@@ -16,34 +18,37 @@ source.new = function()
   return self
 end
 
-source.get_keyword_pattern = function(_, params)
+source._validate_options = function(_, params)
   params.option = vim.tbl_deep_extend('keep', params.option, defaults)
   vim.validate({
-    keyword_length = { params.option.keyword_length, 'number', '`opts.keyword_length` must be `number`' },
-    keyword_pattern = { params.option.keyword_pattern, 'string', '`opts.keyword_pattern` must be `string`' },
-    get_bufnrs = { params.option.get_bufnrs, 'function', '`opts.get_bufnrs` must be `function`' },
+    keyword_length = { params.option.keyword_length, 'number' },
+    keyword_pattern = { params.option.keyword_pattern, 'string' },
+    get_bufnrs = { params.option.get_bufnrs, 'function' },
+    indexing_chunk_size = { params.option.indexing_chunk_size, 'number' },
+    indexing_interval = { params.option.indexing_interval, 'number' },
   })
+end
+
+source.get_keyword_pattern = function(self, params)
+  self:_validate_options(params)
   return params.option.keyword_pattern
 end
 
 source.complete = function(self, params, callback)
-  params.option = vim.tbl_deep_extend('keep', params.option, defaults)
-  vim.validate({
-    keyword_pattern = { params.option.keyword_pattern, 'string', '`opts.keyword_pattern` must be `string`' },
-    get_bufnrs = { params.option.get_bufnrs, 'function', '`opts.get_bufnrs` must be `function`' },
-  })
+  self:_validate_options(params)
 
   local processing = false
-  for _, buf in ipairs(self:_get_buffers(params)) do
+  local bufs = self:_get_buffers(params)
+  for _, buf in ipairs(bufs) do
     processing = processing or buf.processing
   end
 
-  vim.defer_fn(vim.schedule_wrap(function()
+  vim.defer_fn(function()
     local input = string.sub(params.context.cursor_before_line, params.offset)
     local items = {}
     local words = {}
-    for _, buf in ipairs(self:_get_buffers(params)) do
-      for _, word in ipairs(buf:get_words()) do
+    for _, buf in ipairs(bufs) do
+      for word, _ in pairs(buf:get_words()) do
         if not words[word] and input ~= word then
           words[word] = true
           table.insert(items, {
@@ -58,7 +63,7 @@ source.complete = function(self, params, callback)
       items = items,
       isIncomplete = processing,
     })
-  end), processing and 100 or 0)
+  end, processing and 100 or 0)
 end
 
 --- _get_bufs
@@ -69,7 +74,9 @@ source._get_buffers = function(self, params)
       local new_buf = buffer.new(
         bufnr,
         params.option.keyword_length,
-        params.option.keyword_pattern
+        params.option.keyword_pattern,
+        params.option.indexing_chunk_size,
+        params.option.indexing_interval
       )
       new_buf:index()
       new_buf:watch()
