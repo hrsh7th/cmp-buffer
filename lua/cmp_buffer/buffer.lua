@@ -4,7 +4,8 @@
 ---@field public length number
 ---@field public pattern string
 ---@field public timer any|nil
----@field public words table<number, string[]>
+---@field public lines_count number
+---@field public lines_words table<number, string[]>
 ---@field public processing boolean
 local buffer = {}
 
@@ -20,7 +21,8 @@ function buffer.new(bufnr, length, pattern)
   self.length = length
   self.pattern = pattern
   self.timer = nil
-  self.words = {}
+  self.lines_count = 0
+  self.lines_words = {}
   self.processing = false
   return self
 end
@@ -32,12 +34,14 @@ function buffer.close(self)
     self.timer:close()
     self.timer = nil
   end
-  self.words = {}
+  self.lines_words = {}
+  self.lines_count = 0
 end
 
 ---Indexing buffer
 function buffer.index(self)
   self.processing = true
+  self.lines_count = vim.api.nvim_buf_line_count(self.bufnr)
   local index = 1
   local lines = vim.api.nvim_buf_get_lines(self.bufnr, 0, -1, false)
   self.timer = vim.loop.new_timer()
@@ -68,32 +72,64 @@ end
 --- watch
 function buffer.watch(self)
   vim.api.nvim_buf_attach(self.bufnr, false, {
-    on_lines = vim.schedule_wrap(function(_, _, _, firstline, old_lastline, new_lastline, _, _, _)
+    -- NOTE: line indexes are 0-based and the last line is not inclusive.
+    on_lines = function(_, _, _, first_line, old_last_line, new_last_line, _, _, _)
       if not vim.api.nvim_buf_is_valid(self.bufnr) then
         self:close()
         return true
       end
 
-      -- append
-      for i = old_lastline, new_lastline - 1 do
-        table.insert(self.words, i + 1, {})
+      local delta = new_last_line - old_last_line
+      local new_lines_count = self.lines_count + delta
+      if new_lines_count == 0 then  -- clear
+        -- This branch protects against bugs after full-file deletion. If you
+        -- do, for example, gdGG, the new_last_line of the event will be zero.
+        -- Which is not true, a buffer always contains at least one empty line,
+        -- only unloaded buffers contain zero lines.
+        new_lines_count = 1
+        for i = self.lines_count, 2, -1 do
+          self.lines_words[i] = nil
+        end
+        self.lines_words[1] = {}
+      elseif delta > 0 then -- append
+        -- Explicitly reserve more slots in the array part of the lines table,
+        -- all of them will be filled in the next loop, but in reverse order
+        -- (which is why I am concerned about preallocation). Why is there no
+        -- built-in function to do this in Lua???
+        for i = self.lines_count + 1, new_lines_count do
+          self.lines_words[i] = vim.NIL
+        end
+        -- Move forwards the unchanged elements in the tail part.
+        for i = self.lines_count, old_last_line + 1, -1 do
+          self.lines_words[i + delta] = self.lines_words[i]
+        end
+        -- Fill in new tables for the added lines.
+        for i = old_last_line + 1, new_last_line do
+          self.lines_words[i] = {}
+        end
+      elseif delta < 0 then -- remove
+        -- Move backwards the unchanged elements in the tail part.
+        for i = old_last_line + 1, self.lines_count do
+          self.lines_words[i + delta] = self.lines_words[i]
+        end
+        -- Remove (already copied) tables from the end, in reverse order, so
+        -- that we don't make holes in the lines table.
+        for i = self.lines_count, new_lines_count + 1, -1 do
+          self.lines_words[i] = nil
+        end
       end
-
-      -- remove
-      for _ = new_lastline, old_lastline - 1 do
-        table.remove(self.words, new_lastline + 1)
-      end
+      self.lines_count = new_lines_count
 
       -- replace lines
-      local lines = vim.api.nvim_buf_get_lines(self.bufnr, firstline, new_lastline, false)
+      local lines = vim.api.nvim_buf_get_lines(self.bufnr, first_line, new_last_line, true)
       vim.api.nvim_buf_call(self.bufnr, function()
         for i, line in ipairs(lines) do
           if line then
-            self:index_line(firstline + i, line or '')
+            self:index_line(first_line + i, line)
           end
         end
       end)
-    end),
+    end,
   })
 end
 
@@ -120,13 +156,13 @@ function buffer.index_line(self, linenr, line)
     end
   end
 
-  self.words[linenr] = words
+  self.lines_words[linenr] = words
 end
 
 --- get_words
 function buffer.get_words(self)
   local words = {}
-  for _, line in ipairs(self.words) do
+  for _, line in ipairs(self.lines_words) do
     for _, w in ipairs(line) do
       table.insert(words, w)
     end
