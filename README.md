@@ -17,6 +17,13 @@ require'cmp'.setup {
 The below source configuration are available.
 
 
+### keyword_length (type: number)
+
+_Default:_ `3`
+
+Specify word length to gather.
+
+
 ### keyword_pattern (type: string)
 
 _Default:_ `[[\%(-\?\d\+\%(\.\d\+\)\?\|\h\w*\%([\-.]\w*\)*\)]]`

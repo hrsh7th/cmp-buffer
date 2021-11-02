@@ -1,6 +1,7 @@
 local buffer = require('cmp_buffer.buffer')
 
 local defaults = {
+  keyword_length = 3,
   keyword_pattern = [[\%(-\?\d\+\%(\.\d\+\)\?\|\h\w*\%([\-]\w*\)*\)]],
   get_bufnrs = function()
     return { vim.api.nvim_get_current_buf() }
@@ -18,6 +19,7 @@ end
 source.get_keyword_pattern = function(_, params)
   params.option = vim.tbl_deep_extend('keep', params.option, defaults)
   vim.validate({
+    keyword_length = { params.option.keyword_length, 'number', '`opts.keyword_length` must be `number`' },
     keyword_pattern = { params.option.keyword_pattern, 'string', '`opts.keyword_pattern` must be `string`' },
     get_bufnrs = { params.option.get_bufnrs, 'function', '`opts.get_bufnrs` must be `function`' },
   })
@@ -64,7 +66,11 @@ source._get_buffers = function(self, params)
   local buffers = {}
   for _, bufnr in ipairs(params.option.get_bufnrs()) do
     if not self.buffers[bufnr] then
-      local new_buf = buffer.new(bufnr, params.option.keyword_pattern)
+      local new_buf = buffer.new(
+        bufnr,
+        params.option.keyword_length,
+        params.option.keyword_pattern
+      )
       new_buf:index()
       new_buf:watch()
       self.buffers[bufnr] = new_buf

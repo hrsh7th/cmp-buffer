@@ -1,6 +1,7 @@
 ---@class cmp_buffer.Buffer
 ---@field public bufnr number
 ---@field public regexes any[]
+---@field public length number
 ---@field public pattern string
 ---@field public timer any|nil
 ---@field public words table<number, string[]>
@@ -9,12 +10,14 @@ local buffer = {}
 
 ---Create new buffer object
 ---@param bufnr number
+---@param length number
 ---@param pattern string
 ---@return cmp_buffer.Buffer
-function buffer.new(bufnr, pattern)
+function buffer.new(bufnr, length, pattern)
   local self = setmetatable({}, { __index = buffer })
   self.bufnr = bufnr
   self.regexes = {}
+  self.length = length
   self.pattern = pattern
   self.timer = nil
   self.words = {}
@@ -103,7 +106,7 @@ function buffer.index_line(self, i, line)
     local s, e = self:matchstrpos(buf)
     if s then
       local word = string.sub(buf, s, e - 1)
-      if #word > 1 then
+      if #word >= self.length then
         table.insert(words, word)
       end
     end
