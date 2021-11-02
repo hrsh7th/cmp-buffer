@@ -1,10 +1,7 @@
 ---@class cmp_buffer.Buffer
 ---@field public bufnr number
+---@field public opts cmp_buffer.Options
 ---@field public regex any
----@field public length number
----@field public pattern string
----@field public indexing_chunk_size number
----@field public indexing_interval number
 ---@field public timer any|nil
 ---@field public lines_words table<number, string[]>
 ---@field public unique_words_curr_line table<string, boolean>
@@ -19,12 +16,9 @@ local buffer = {}
 
 ---Create new buffer object
 ---@param bufnr number
----@param length number
----@param pattern string
----@param indexing_chunk_size number
----@param indexing_interval number
+---@param opts cmp_buffer.Options
 ---@return cmp_buffer.Buffer
-function buffer.new(bufnr, length, pattern, indexing_chunk_size, indexing_interval)
+function buffer.new(bufnr, opts)
   local self = setmetatable({}, { __index = buffer })
 
   self.bufnr = bufnr
@@ -32,11 +26,8 @@ function buffer.new(bufnr, length, pattern, indexing_chunk_size, indexing_interv
   self.closed = false
   self.on_close_cb = nil
 
-  self.regex = vim.regex(pattern)
-  self.length = length
-  self.pattern = pattern
-  self.indexing_chunk_size = indexing_chunk_size
-  self.indexing_interval = indexing_interval
+  self.opts = opts
+  self.regex = vim.regex(opts.keyword_pattern)
 
   self.lines_count = 0
   self.lines_words = {}
@@ -95,11 +86,11 @@ function buffer.index(self)
   --   self.lines_words[i] = {}
   -- end
 
-  if self.indexing_interval <= 0 then
-    self:index_range(0, self.lines_count, self.indexing_chunk_size)
+  if self.opts.indexing_interval <= 0 then
+    self:index_range(0, self.lines_count, self.opts.indexing_chunk_size)
     self:mark_all_lines_dirty()
   else
-    self:index_range_async(0, self.lines_count, self.indexing_chunk_size)
+    self:index_range_async(0, self.lines_count, self.opts.indexing_chunk_size)
   end
 end
 
@@ -137,7 +128,7 @@ function buffer.index_range_async(self, range_start, range_end, chunk_size)
   local scheduled = false
 
   self.timer = vim.loop.new_timer()
-  self.timer:start(0, self.indexing_interval, function()
+  self.timer:start(0, self.opts.indexing_interval, function()
     if scheduled then
       return
     end
@@ -224,7 +215,7 @@ function buffer.watch(self)
       self.lines_count = new_lines_count
 
       -- replace lines
-      self:index_range(first_line, new_last_line, self.indexing_chunk_size)
+      self:index_range(first_line, new_last_line, self.opts.indexing_chunk_size)
 
       if first_line == self.last_edit_first_line and old_last_line == self.last_edit_last_line and new_lines_count - new_last_line == old_lines_count - self.last_edit_last_line then
         self.unique_words_curr_line_dirty = true
@@ -257,7 +248,7 @@ function buffer.watch(self)
       end
       self.lines_count = new_lines_count
 
-      self:index_range(0, self.lines_count, self.indexing_chunk_size)
+      self:index_range(0, self.lines_count, self.opts.indexing_chunk_size)
       self:mark_all_lines_dirty()
     end,
 
@@ -292,7 +283,7 @@ function buffer.index_line(self, linenr, line)
     local match_start, match_end = self.regex:match_str(remaining)
     if match_start and match_end then
       local word = remaining:sub(match_start + 1, match_end)
-      if #word >= self.length then
+      if #word >= self.opts.keyword_length then
         words[word_i] = word
         word_i = word_i + 1
       end
