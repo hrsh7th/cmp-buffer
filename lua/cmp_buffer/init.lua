@@ -34,15 +34,19 @@ source.complete = function(self, params, callback)
   })
 
   local processing = false
-  for _, buf in ipairs(self:_get_buffers(params)) do
-    processing = processing or buf.processing
+  local bufs = self:_get_buffers(params)
+  for _, buf in ipairs(bufs) do
+    if buf.timer then
+      processing = true
+      break
+    end
   end
 
-  vim.defer_fn(vim.schedule_wrap(function()
+  vim.defer_fn(function()
     local input = string.sub(params.context.cursor_before_line, params.offset)
     local items = {}
     local words = {}
-    for _, buf in ipairs(self:_get_buffers(params)) do
+    for _, buf in ipairs(bufs) do
       for _, word in ipairs(buf:get_words()) do
         if not words[word] and input ~= word then
           words[word] = true
@@ -58,7 +62,7 @@ source.complete = function(self, params, callback)
       items = items,
       isIncomplete = processing,
     })
-  end), processing and 100 or 0)
+  end, processing and 100 or 0)
 end
 
 --- _get_bufs
@@ -71,6 +75,9 @@ source._get_buffers = function(self, params)
         params.option.keyword_length,
         params.option.keyword_pattern
       )
+      new_buf.on_close_cb = function()
+        self.buffers[bufnr] = nil
+      end
       new_buf:index()
       new_buf:watch()
       self.buffers[bufnr] = new_buf
