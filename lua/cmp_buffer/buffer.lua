@@ -8,6 +8,8 @@
 ---@field public timer any|nil
 ---@field public lines_count number
 ---@field public lines_words table<number, string[]>
+---@field public unique_words table<string, boolean>
+---@field public unique_words_dirty boolean
 ---@field public closed boolean
 ---@field public on_close_cb fun()|nil
 local buffer = {}
@@ -28,6 +30,8 @@ function buffer.new(bufnr, length, pattern)
   self.timer = nil
   self.lines_count = 0
   self.lines_words = {}
+  self.unique_words = {}
+  self.unique_words_dirty = true
   self.closed = false
   self.on_close_cb = nil
   return self
@@ -39,6 +43,8 @@ function buffer.close(self)
   self:stop_indexing_timer()
   self.lines_count = 0
   self.lines_words = {}
+  self.unique_words = {}
+  self.unique_words_dirty = false
   if self.on_close_cb then
     self.on_close_cb()
   end
@@ -92,6 +98,7 @@ function buffer.index_range_async(self, range_start, range_end)
         end
       end)
       chunk_start = chunk_end
+      self.unique_words_dirty = true
 
       if chunk_end >= range_end then
         self:stop_indexing_timer()
@@ -161,6 +168,7 @@ function buffer.watch(self)
 
       -- replace lines
       self:index_range(first_line, new_last_line)
+      self.unique_words_dirty = true
     end,
 
     on_reload = function(_, _)
@@ -183,6 +191,7 @@ function buffer.watch(self)
       self.lines_count = new_lines_count
 
       self:index_range(0, self.lines_count)
+      self.unique_words_dirty = true
     end,
 
     on_detach = function(_, _)
@@ -221,15 +230,26 @@ function buffer.index_line(self, linenr, line)
   end
 end
 
---- get_words
 function buffer.get_words(self)
-  local words = {}
+  -- NOTE: unique_words are rebuilt on-demand because it is common for the
+  -- watcher callback to be fired VERY frequently, and a rebuild needs to go
+  -- over ALL lines, not just the changed ones.
+  if self.unique_words_dirty then
+    self:rebuild_unique_words()
+  end
+  return self.unique_words
+end
+
+function buffer.rebuild_unique_words(self)
+  for w, _ in pairs(self.unique_words) do
+    self.unique_words[w] = nil
+  end
   for _, line in ipairs(self.lines_words) do
     for _, w in ipairs(line) do
-      table.insert(words, w)
+      self.unique_words[w] = true
     end
   end
-  return words
+  self.unique_words_dirty = false
 end
 
 return buffer

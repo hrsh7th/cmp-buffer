@@ -47,7 +47,7 @@ source.complete = function(self, params, callback)
     local items = {}
     local words = {}
     for _, buf in ipairs(bufs) do
-      for _, word in ipairs(buf:get_words()) do
+      for word, _ in pairs(buf:get_words()) do
         if not words[word] and input ~= word then
           words[word] = true
           table.insert(items, {
