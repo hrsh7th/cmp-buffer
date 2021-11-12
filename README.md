@@ -67,20 +67,26 @@ end
 This source also provides a comparator function which uses information from the word indexer
 to sort completion results based on the distance of the word from the cursor line. It will also
 sort completion results coming from other sources, such as Language Servers, which might improve
-accuracy of their suggestions too. The usage is as follows:
+accuracy of their suggestions too. The usage is, unfortunately, pretty hacky:
 
 ```lua
-local cmp_buffer = require('cmp_buffer')
+local cmp = require('cmp')
+local cmp_buffer = require('cmp_buffer').new()
+
+-- You have to register and use a source with a different name from 'buffer'
+-- because otherwise duplicate buffer sources will both be indexing the same
+-- file twice, in parallel.
+cmp.register_source('buffer_with_distance', cmp_buffer)
 
 cmp.setup({
   sources = {
-    { name = 'buffer' }
+    { name = 'buffer_with_distance' },  -- NOT 'buffer'!
       -- The rest of your sources...
   },
 
   sorting = {
     comparators = {
-      cmp_buffer.compare_word_distance,
+      function(...) return cmp_buffer:compare_word_distance(...) end,
       -- The rest of your comparators...
     }
   }

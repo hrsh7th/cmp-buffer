@@ -94,22 +94,20 @@ source._get_buffers = function(self, opts)
   return buffers
 end
 
-source._get_distance_from_entry = function(entry)
-  if getmetatable(entry.source.source).__index == source then
-    local buf = entry.source.source.buffers[entry.context.bufnr]
-    if buf then
-      local distances = buf:get_words_distances(entry.context.cursor.line + 1)
-      return distances[entry.completion_item.filterText] or distances[entry.completion_item.label]
-    end
+source._get_distance_from_entry = function(self, entry)
+  local buf = self.buffers[entry.context.bufnr]
+  if buf then
+    local distances = buf:get_words_distances(entry.context.cursor.line + 1)
+    return distances[entry.completion_item.filterText] or distances[entry.completion_item.label]
   end
 end
 
-source.compare_word_distance = function(entry1, entry2)
+source.compare_word_distance = function(self, entry1, entry2)
   if entry1.context ~= entry2.context then
     return
   end
-  local dist1 = source._get_distance_from_entry(entry1) or math.huge
-  local dist2 = source._get_distance_from_entry(entry2) or math.huge
+  local dist1 = self:_get_distance_from_entry(entry1) or math.huge
+  local dist2 = self:_get_distance_from_entry(entry2) or math.huge
   if dist1 ~= dist2 then
     return dist1 < dist2
   end
