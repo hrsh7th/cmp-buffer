@@ -15,6 +15,9 @@
 ---@field public last_edit_last_line number
 ---@field public closed boolean
 ---@field public on_close_cb fun()|nil
+---@field public words_distances table<string, number>
+---@field public words_distances_last_cursor_pos number
+---@field public words_distances_dirty boolean
 local buffer = {}
 
 ---Create new buffer object
@@ -44,6 +47,10 @@ function buffer.new(bufnr, opts)
   self.last_edit_first_line = 0
   self.last_edit_last_line = 0
 
+  self.words_distances = {}
+  self.words_distances_dirty = true
+  self.words_distances_last_cursor_pos = 0
+
   return self
 end
 
@@ -61,6 +68,10 @@ function buffer.close(self)
   self.unique_words_other_lines_dirty = false
   self.last_edit_first_line = 0
   self.last_edit_last_line = 0
+
+  self.words_distances = {}
+  self.words_distances_dirty = false
+  self.words_distances_last_cursor_pos = 0
 
   if self.on_close_cb then
     self.on_close_cb()
@@ -123,6 +134,7 @@ function buffer.index_range_async(self, range_start, range_end)
       end)
       chunk_start = chunk_end
       self:mark_all_lines_dirty()
+      self.words_distances_dirty = true
 
       if chunk_end >= range_end then
         self:stop_indexing_timer()
@@ -201,6 +213,8 @@ function buffer.watch(self)
       end
       self.last_edit_first_line = first_line
       self.last_edit_last_line = new_last_line
+
+      self.words_distances_dirty = true
     end,
 
     on_reload = function(_, _)
@@ -224,6 +238,7 @@ function buffer.watch(self)
 
       self:index_range(0, self.lines_count)
       self:mark_all_lines_dirty()
+      self.words_distances_dirty = true
     end,
 
     on_detach = function(_, _)
@@ -293,6 +308,26 @@ function buffer.rebuild_unique_words(self, words_table, range_start, range_end)
       words_table[w] = true
     end
   end
+end
+
+---@param cursor_pos number 1-indexed line number
+---@return table<string, number>
+function buffer.get_words_distances(self, cursor_pos)
+  if self.words_distances_dirty or cursor_pos ~= self.words_distances_last_cursor_pos then
+    local distances = self.words_distances
+    for k in pairs(distances) do
+      distances[k] = nil
+    end
+    for linenr, line in ipairs(self.lines_words) do
+      for _, w in ipairs(line) do
+        local dist = math.abs(cursor_pos - linenr)
+        distances[w] = distances[w] and math.min(distances[w], dist) or dist
+      end
+    end
+    self.words_distances_last_cursor_pos = cursor_pos
+    self.words_distances_dirty = false
+  end
+  return self.words_distances
 end
 
 return buffer

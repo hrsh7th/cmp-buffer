@@ -2,7 +2,7 @@
 
 nvim-cmp source for buffer words.
 
-# Setup
+## Setup
 
 ```lua
 require'cmp'.setup {
@@ -12,7 +12,7 @@ require'cmp'.setup {
 }
 ```
 
-# Configuration
+## Configuration
 
 The below source configuration are available.
 
@@ -59,4 +59,30 @@ get_bufnrs = function()
   end
   return vim.tbl_keys(bufs)
 end
+```
+
+
+## Distance-based sorting
+
+This source also provides a comparator function which uses information from the word indexer
+to sort completion results based on the distance of the word from the cursor line. It will also
+sort completion results coming from other sources, such as Language Servers, which might improve
+accuracy of their suggestions too. The usage is as follows:
+
+```lua
+local cmp_buffer = require('cmp_buffer')
+
+cmp.setup({
+  sources = {
+    { name = 'buffer' }
+      -- The rest of your sources...
+  },
+
+  sorting = {
+    comparators = {
+      cmp_buffer.compare_word_distance,
+      -- The rest of your comparators...
+    }
+  }
+})
 ```
