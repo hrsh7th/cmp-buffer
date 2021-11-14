@@ -15,7 +15,7 @@ local defaults = {
     return { vim.api.nvim_get_current_buf() }
   end,
   indexing_chunk_size = 1000,
-  indexing_interval = 200,
+  indexing_interval = 100,
 }
 
 local source = {}

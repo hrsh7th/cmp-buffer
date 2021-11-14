@@ -18,6 +18,10 @@
 ---@field public words_distances_dirty boolean
 local buffer = {}
 
+-- For some reason requesting this much lines multiple times in chunks leads to
+-- much better memory usage than fetching the entire file in one go.
+buffer.GET_LINES_CHUNK_SIZE = 1000
+
 ---Create new buffer object
 ---@param bufnr number
 ---@param opts cmp_buffer.Options
@@ -98,11 +102,11 @@ function buffer.index(self)
   --   self.lines_words[i] = {}
   -- end
 
-  if self.opts.indexing_interval <= 0 then
-    self:index_range(0, self.lines_count, self.opts.indexing_chunk_size)
+  if self.opts.indexing_interval < 1 then
+    self:index_range(0, self.lines_count)
     self:mark_all_lines_dirty()
   else
-    self:index_range_async(0, self.lines_count, self.opts.indexing_chunk_size)
+    self:index_buffer_async()
   end
 end
 
@@ -116,20 +120,17 @@ function buffer.safe_buf_call(self, callback)
 end
 
 --- sync algorithm
-function buffer.index_range(self, range_start, range_end, chunk_size)
+function buffer.index_range(self, range_start, range_end, skip_already_indexed)
   self:safe_buf_call(function()
-    if chunk_size < 1 then
-      chunk_size = range_end - range_start
-    end
+    local chunk_size = self.GET_LINES_CHUNK_SIZE
     local chunk_start = range_start
     while chunk_start < range_end do
       local chunk_end = math.min(chunk_start + chunk_size, range_end)
-      -- For some reason requesting line arrays multiple times in chunks leads
-      -- to much better memory usage than doing that in one big array, which is
-      -- why the sync algorithm has better memory usage than the async one.
       local chunk_lines = vim.api.nvim_buf_get_lines(self.bufnr, chunk_start, chunk_end, true)
       for i, line in ipairs(chunk_lines) do
-        self:index_line(chunk_start + i, line)
+        if not skip_already_indexed or not self.lines_words[chunk_start + i] then
+          self:index_line(chunk_start + i, line)
+        end
       end
       chunk_start = chunk_end
     end
@@ -137,19 +138,17 @@ function buffer.index_range(self, range_start, range_end, chunk_size)
 end
 
 --- async algorithm
-function buffer.index_range_async(self, range_start, range_end, chunk_size)
-  if chunk_size < 1 then
-    chunk_size = range_end - range_start
-  end
-  local chunk_start = range_start
+function buffer.index_buffer_async(self)
+  local chunk_start = 0
 
-  local lines = vim.api.nvim_buf_get_lines(self.bufnr, range_start, range_end, true)
   -- This flag prevents vim.schedule() callbacks from piling up in the queue
   -- when the indexing interval is very short.
   local scheduled = false
-
   self.timer = vim.loop.new_timer()
-  self.timer:start(0, self.opts.indexing_interval, function()
+  -- Negative values result in an integer overflow in luv (vim.loop), and zero
+  -- disables timer repeat, so only intervals larger than 1 are valid.
+  local interval = math.max(1, self.opts.indexing_interval)
+  self.timer:start(0, interval, function()
     if scheduled then
       return
     end
@@ -160,19 +159,27 @@ function buffer.index_range_async(self, range_start, range_end, chunk_size)
         return
       end
 
-      local chunk_end = math.min(chunk_start + chunk_size, range_end)
-      self:safe_buf_call(function()
-        for linenr = chunk_start + 1, chunk_end do
-          self:index_line(linenr, lines[linenr])
-        end
-      end)
+      -- Note that the async indexer is designed to not break even if the user
+      -- is editing the file while it is in the process of being indexed.
+      -- Because the indexing in watcher must use the synchronous algorithm, we
+      -- assume that the data already present in self.lines_words to be correct
+      -- and doesn't need refreshing here because even if we do receive text
+      -- from nvim_buf_get_lines different from what the watcher has seen, it
+      -- will catch up on the next on_lines event.
+
+      local line_count = vim.api.nvim_buf_line_count(self.bufnr)
+      -- Skip over the already indexed lines
+      while chunk_start < line_count and self.lines_words[chunk_start + 1] do
+        chunk_start = chunk_start + 1
+      end
+      local chunk_end = math.min(chunk_start + self.opts.indexing_chunk_size, line_count)
+      if chunk_end >= line_count then
+        self:stop_indexing_timer()
+      end
+      self:index_range(chunk_start, chunk_end, true)
       chunk_start = chunk_end
       self:mark_all_lines_dirty()
       self.words_distances_dirty = true
-
-      if chunk_end >= range_end then
-        self:stop_indexing_timer()
-      end
     end)
   end)
 end
@@ -244,7 +251,7 @@ function buffer.watch(self)
       self.lines_count = new_lines_count
 
       -- replace lines
-      self:index_range(first_line, new_last_line, self.opts.indexing_chunk_size)
+      self:index_range(first_line, new_last_line)
 
       if first_line == self.last_edit_first_line and old_last_line == self.last_edit_last_line and new_last_line == self.last_edit_last_line then
         self.unique_words_curr_line_dirty = true
@@ -279,7 +286,7 @@ function buffer.watch(self)
       end
       self.lines_count = new_lines_count
 
-      self:index_range(0, self.lines_count, self.opts.indexing_chunk_size)
+      self:index_range(0, self.lines_count)
       self:mark_all_lines_dirty()
       self.words_distances_dirty = true
     end,
