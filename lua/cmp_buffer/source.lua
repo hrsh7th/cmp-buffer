@@ -102,7 +102,7 @@ source._get_distance_from_entry = function(self, entry)
   end
 end
 
-source.compare_word_distance = function(self, entry1, entry2)
+source.compare_locality = function(self, entry1, entry2)
   if entry1.context ~= entry2.context then
     return
   end

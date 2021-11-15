@@ -62,7 +62,7 @@ end
 ```
 
 
-## Distance-based sorting
+## Locality bonus comparator (distance-based sorting)
 
 This source also provides a comparator function which uses information from the word indexer
 to sort completion results based on the distance of the word from the cursor line. It will also
@@ -80,7 +80,7 @@ cmp.setup({
   },
   sorting = {
     comparators = {
-      function(...) return cmp_buffer:compare_word_distance(...) end,
+      function(...) return cmp_buffer:compare_locality(...) end,
       -- The rest of your comparators...
     }
   }
