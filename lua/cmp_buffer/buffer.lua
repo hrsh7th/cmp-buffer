@@ -16,7 +16,7 @@
 ---@field public closed boolean
 ---@field public on_close_cb fun()|nil
 ---@field public words_distances table<string, number>
----@field public words_distances_last_cursor_pos number
+---@field public words_distances_last_cursor_row number
 ---@field public words_distances_dirty boolean
 local buffer = {}
 
@@ -49,7 +49,7 @@ function buffer.new(bufnr, opts)
 
   self.words_distances = {}
   self.words_distances_dirty = true
-  self.words_distances_last_cursor_pos = 0
+  self.words_distances_last_cursor_row = 0
 
   return self
 end
@@ -71,7 +71,7 @@ function buffer.close(self)
 
   self.words_distances = {}
   self.words_distances_dirty = false
-  self.words_distances_last_cursor_pos = 0
+  self.words_distances_last_cursor_row = 0
 
   if self.on_close_cb then
     self.on_close_cb()
@@ -250,13 +250,17 @@ function buffer.watch(self)
   })
 end
 
+local function clear_table(tbl)
+  for k in pairs(tbl) do
+    tbl[k] = nil
+  end
+end
+
 ---@param linenr number
 ---@param line string
 function buffer.index_line(self, linenr, line)
   local words = self.lines_words[linenr]
-  for k, _ in ipairs(words) do
-    words[k] = nil
-  end
+  clear_table(words)
   local word_i = 1
 
   local remaining = line
@@ -282,20 +286,14 @@ function buffer.get_words(self)
   -- watcher callback to be fired VERY frequently, and a rebuild needs to go
   -- over ALL lines, not just the changed ones.
   if self.unique_words_other_lines_dirty then
-    local words = self.unique_words_other_lines
-    for w, _ in pairs(words) do
-      words[w] = nil
-    end
-    self:rebuild_unique_words(words, 0, self.last_edit_first_line)
-    self:rebuild_unique_words(words, self.last_edit_last_line, self.lines_count)
+    clear_table(self.unique_words_other_lines)
+    self:rebuild_unique_words(self.unique_words_other_lines, 0, self.last_edit_first_line)
+    self:rebuild_unique_words(self.unique_words_other_lines, self.last_edit_last_line, self.lines_count)
     self.unique_words_other_lines_dirty = false
   end
   if self.unique_words_curr_line_dirty then
-    local words = self.unique_words_curr_line
-    for w, _ in pairs(words) do
-      words[w] = nil
-    end
-    self:rebuild_unique_words(words, self.last_edit_first_line, self.last_edit_last_line)
+    clear_table(self.unique_words_curr_line)
+    self:rebuild_unique_words(self.unique_words_curr_line, self.last_edit_first_line, self.last_edit_last_line)
     self.unique_words_curr_line_dirty = false
   end
   return { self.unique_words_other_lines, self.unique_words_curr_line }
@@ -310,21 +308,19 @@ function buffer.rebuild_unique_words(self, words_table, range_start, range_end)
   end
 end
 
----@param cursor_pos number 1-indexed line number
+---@param cursor_row number
 ---@return table<string, number>
-function buffer.get_words_distances(self, cursor_pos)
-  if self.words_distances_dirty or cursor_pos ~= self.words_distances_last_cursor_pos then
+function buffer.get_words_distances(self, cursor_row)
+  if self.words_distances_dirty or cursor_row ~= self.words_distances_last_cursor_row then
     local distances = self.words_distances
-    for k in pairs(distances) do
-      distances[k] = nil
-    end
+    clear_table(distances)
     for linenr, line in ipairs(self.lines_words) do
       for _, w in ipairs(line) do
-        local dist = math.abs(cursor_pos - linenr)
+        local dist = math.abs(cursor_row - linenr)
         distances[w] = distances[w] and math.min(distances[w], dist) or dist
       end
     end
-    self.words_distances_last_cursor_pos = cursor_pos
+    self.words_distances_last_cursor_row = cursor_row
     self.words_distances_dirty = false
   end
   return self.words_distances
