@@ -1,5 +1,11 @@
 local buffer = require('cmp_buffer.buffer')
 
+---@class cmp_buffer.Options
+---@field public keyword_length number
+---@field public keyword_pattern string
+---@field public get_bufnrs fun(): number[]
+
+---@type cmp_buffer.Options
 local defaults = {
   keyword_length = 3,
   keyword_pattern = [[\%(-\?\d\+\%(\.\d\+\)\?\|\h\w*\%([\-]\w*\)*\)]],
@@ -16,25 +22,27 @@ source.new = function()
   return self
 end
 
-source.get_keyword_pattern = function(_, params)
-  params.option = vim.tbl_deep_extend('keep', params.option, defaults)
+---@return cmp_buffer.Options
+source._validate_options = function(_, params)
+  local opts = vim.tbl_deep_extend('keep', params.option, defaults)
   vim.validate({
-    keyword_length = { params.option.keyword_length, 'number', '`opts.keyword_length` must be `number`' },
-    keyword_pattern = { params.option.keyword_pattern, 'string', '`opts.keyword_pattern` must be `string`' },
-    get_bufnrs = { params.option.get_bufnrs, 'function', '`opts.get_bufnrs` must be `function`' },
+    keyword_length = { opts.keyword_length, 'number' },
+    keyword_pattern = { opts.keyword_pattern, 'string' },
+    get_bufnrs = { opts.get_bufnrs, 'function' },
   })
-  return params.option.keyword_pattern
+  return opts
+end
+
+source.get_keyword_pattern = function(self, params)
+  local opts = self:_validate_options(params)
+  return opts.keyword_pattern
 end
 
 source.complete = function(self, params, callback)
-  params.option = vim.tbl_deep_extend('keep', params.option, defaults)
-  vim.validate({
-    keyword_pattern = { params.option.keyword_pattern, 'string', '`opts.keyword_pattern` must be `string`' },
-    get_bufnrs = { params.option.get_bufnrs, 'function', '`opts.get_bufnrs` must be `function`' },
-  })
+  local opts = self:_validate_options(params)
 
   local processing = false
-  local bufs = self:_get_buffers(params)
+  local bufs = self:_get_buffers(opts)
   for _, buf in ipairs(bufs) do
     if buf.timer then
       processing = true
@@ -67,16 +75,12 @@ source.complete = function(self, params, callback)
   end, processing and 100 or 0)
 end
 
---- _get_bufs
-source._get_buffers = function(self, params)
+---@param opts cmp_buffer.Options
+source._get_buffers = function(self, opts)
   local buffers = {}
-  for _, bufnr in ipairs(params.option.get_bufnrs()) do
+  for _, bufnr in ipairs(opts.get_bufnrs()) do
     if not self.buffers[bufnr] then
-      local new_buf = buffer.new(
-        bufnr,
-        params.option.keyword_length,
-        params.option.keyword_pattern
-      )
+      local new_buf = buffer.new(bufnr, opts)
       new_buf.on_close_cb = function()
         self.buffers[bufnr] = nil
       end

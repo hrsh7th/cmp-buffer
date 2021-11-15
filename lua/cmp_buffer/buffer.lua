@@ -1,8 +1,7 @@
 ---@class cmp_buffer.Buffer
 ---@field public bufnr number
+---@field public opts cmp_buffer.Options
 ---@field public regex any
----@field public length number
----@field public pattern string
 ---@field public indexing_chunk_size number
 ---@field public indexing_interval number
 ---@field public timer any|nil
@@ -20,10 +19,9 @@ local buffer = {}
 
 ---Create new buffer object
 ---@param bufnr number
----@param length number
----@param pattern string
+---@param opts cmp_buffer.Options
 ---@return cmp_buffer.Buffer
-function buffer.new(bufnr, length, pattern)
+function buffer.new(bufnr, opts)
   local self = setmetatable({}, { __index = buffer })
 
   self.bufnr = bufnr
@@ -31,9 +29,8 @@ function buffer.new(bufnr, length, pattern)
   self.closed = false
   self.on_close_cb = nil
 
-  self.regex = vim.regex(pattern)
-  self.length = length
-  self.pattern = pattern
+  self.opts = opts
+  self.regex = vim.regex(self.opts.keyword_pattern)
   self.indexing_chunk_size = 1000
   self.indexing_interval = 200
 
@@ -254,7 +251,7 @@ function buffer.index_line(self, linenr, line)
     local match_start, match_end = self.regex:match_str(remaining)
     if match_start and match_end then
       local word = remaining:sub(match_start + 1, match_end)
-      if #word >= self.length then
+      if #word >= self.opts.keyword_length then
         words[word_i] = word
         word_i = word_i + 1
       end
