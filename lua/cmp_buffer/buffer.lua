@@ -160,6 +160,13 @@ function buffer.watch(self)
         return true
       end
 
+      if old_last_line == new_last_line and first_line == new_last_line then
+        -- This condition is really intended as a workaround for
+        -- https://github.com/hrsh7th/cmp-buffer/issues/28, but it will also
+        -- protect us from completely empty text edits.
+        return
+      end
+
       local delta = new_last_line - old_last_line
       local old_lines_count = self.lines_count
       local new_lines_count = old_lines_count + delta
