@@ -260,7 +260,12 @@ end
 ---@param line string
 function buffer.index_line(self, linenr, line)
   local words = self.lines_words[linenr]
-  clear_table(words)
+  if not words then
+    words = {}
+    self.lines_words[linenr] = words
+  else
+    clear_table(words)
+  end
   local word_i = 1
 
   local remaining = line
@@ -302,7 +307,7 @@ end
 --- rebuild_unique_words
 function buffer.rebuild_unique_words(self, words_table, range_start, range_end)
   for i = range_start + 1, range_end do
-    for _, w in ipairs(self.lines_words[i]) do
+    for _, w in ipairs(self.lines_words[i] or {}) do
       words_table[w] = true
     end
   end
@@ -314,9 +319,9 @@ function buffer.get_words_distances(self, cursor_row)
   if self.words_distances_dirty or cursor_row ~= self.words_distances_last_cursor_row then
     local distances = self.words_distances
     clear_table(distances)
-    for linenr, line in ipairs(self.lines_words) do
-      for _, w in ipairs(line) do
-        local dist = math.abs(cursor_row - linenr)
+    for i = 1, self.lines_count do
+      for _, w in ipairs(self.lines_words[i] or {}) do
+        local dist = math.abs(cursor_row - i)
         distances[w] = distances[w] and math.min(distances[w], dist) or dist
       end
     end
