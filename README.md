@@ -5,11 +5,11 @@ nvim-cmp source for buffer words.
 ## Setup
 
 ```lua
-require'cmp'.setup {
+require('cmp').setup({
   sources = {
-    { name = 'buffer' }
-  }
-}
+    { name = 'buffer' },
+  },
+})
 ```
 
 ## Configuration
@@ -30,7 +30,41 @@ _Default:_ `[[\%(-\?\d\+\%(\.\d\+\)\?\|\h\w*\%([\-.]\w*\)*\)]]`
 
 A vim's regular expression for creating a word list from buffer content.
 
-You can set this to `\k\+` if you want to use the `iskeyword` option for recognizing words.
+You can set this to `[[\k\+]]` if you want to use the `iskeyword` option for recognizing words.
+Lua's `[[ ]]` string literals are particularly useful here to avoid escaping all of the backslash
+(`\`) characters used for writing regular expressions.
+
+**NOTE:** Be careful with where you set this option! You must do this:
+
+```lua
+cmp.setup({
+  sources = {
+    {
+      name = 'buffer',
+      -- Correct:
+      option = {
+        keyword_pattern = [[\k\+]],
+      }
+    },
+  },
+})
+```
+
+Instead of this:
+
+```lua
+cmp.setup({
+  sources = {
+    {
+      name = 'buffer',
+      -- Wrong:
+      keyword_pattern = [[\k\+]],
+    },
+  },
+})
+```
+
+The second notation is allowed by nvim-cmp (documented [here](https://github.com/hrsh7th/nvim-cmp#sourcesnumberkeyword_pattern-type-string)), but it is meant for a different purpose and will not be detected by this plugin as the pattern for searching words.
 
 
 ### get_bufnrs (type: fun(): number[])
