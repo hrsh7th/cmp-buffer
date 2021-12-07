@@ -14,7 +14,20 @@ require('cmp').setup({
 
 ## Configuration
 
-The below source configuration are available.
+The below source configuration are available. To set any of these options, do:
+
+```lua
+cmp.setup({
+  sources = {
+    { 
+      name = 'buffer',
+      option = {
+        -- Options go into this table
+      },
+    },
+  },
+})
+```
 
 
 ### keyword_length (type: number)
