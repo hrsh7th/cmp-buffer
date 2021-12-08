@@ -21,7 +21,7 @@ cmp.setup({
   sources = {
     { 
       name = 'buffer',
-      option = {
+      options = {
         -- Options go into this table
       },
     },
@@ -55,7 +55,7 @@ cmp.setup({
     {
       name = 'buffer',
       -- Correct:
-      option = {
+      options = {
         keyword_pattern = [[\k\+]],
       }
     },
