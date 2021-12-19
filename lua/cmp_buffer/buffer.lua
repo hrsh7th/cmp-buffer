@@ -103,8 +103,17 @@ function buffer.index(self)
   self:index_range_async(0, self.lines_count)
 end
 
+--- Workaround for https://github.com/neovim/neovim/issues/16729
+function buffer.safe_buf_call(self, callback)
+  if vim.api.nvim_get_current_buf() == self.bufnr then
+    callback()
+  else
+    vim.api.nvim_buf_call(self.bufnr, callback)
+  end
+end
+
 function buffer.index_range(self, range_start, range_end)
-  vim.api.nvim_buf_call(self.bufnr, function()
+  self:safe_buf_call(function()
     local lines = vim.api.nvim_buf_get_lines(self.bufnr, range_start, range_end, true)
     for i, line in ipairs(lines) do
       self:index_line(range_start + i, line)
@@ -127,7 +136,7 @@ function buffer.index_range_async(self, range_start, range_end)
       end
 
       local chunk_end = math.min(chunk_start + self.indexing_chunk_size, range_end)
-      vim.api.nvim_buf_call(self.bufnr, function()
+      self:safe_buf_call(function()
         for linenr = chunk_start + 1, chunk_end do
           self:index_line(linenr, lines[linenr])
         end
