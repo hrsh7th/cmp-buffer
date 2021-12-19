@@ -50,7 +50,7 @@ source.complete = function(self, params, callback)
   local processing = false
   local bufs = self:_get_buffers(opts)
   for _, buf in ipairs(bufs) do
-    if buf.timer then
+    if buf.timer:is_active() then
       processing = true
       break
     end
@@ -90,7 +90,7 @@ source._get_buffers = function(self, opts)
       new_buf.on_close_cb = function()
         self.buffers[bufnr] = nil
       end
-      new_buf:index()
+      new_buf:start_indexing_timer()
       new_buf:watch()
       self.buffers[bufnr] = new_buf
     end
