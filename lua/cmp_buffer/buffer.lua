@@ -150,16 +150,16 @@ function buffer.start_indexing_timer(self)
       self.timer_current_line = self.timer_current_line + 1
     end
 
-    local chunk_start = self.timer_current_line
-    local chunk_size = self.opts.indexing_chunk_size
+    local batch_start = self.timer_current_line
+    local batch_size = self.opts.indexing_batch_size
     -- NOTE: self.lines_count may be modified by the indexer.
-    local chunk_end = chunk_size >= 1 and math.min(chunk_start + chunk_size, self.lines_count) or self.lines_count
-    if chunk_end >= self.lines_count then
+    local batch_end = batch_size >= 1 and math.min(batch_start + batch_size, self.lines_count) or self.lines_count
+    if batch_end >= self.lines_count then
       self:stop_indexing_timer()
     end
 
-    self:index_range(chunk_start, chunk_end, true)
-    self.timer_current_line = chunk_end
+    self:index_range(batch_start, batch_end, true)
+    self.timer_current_line = batch_end
     self:mark_all_lines_dirty()
   end)
 end

@@ -4,7 +4,7 @@ local buffer = require('cmp_buffer.buffer')
 ---@field public keyword_length number
 ---@field public keyword_pattern string
 ---@field public get_bufnrs fun(): number[]
----@field public indexing_chunk_size number
+---@field public indexing_batch_size number
 ---@field public indexing_interval number
 
 ---@type cmp_buffer.Options
@@ -14,7 +14,7 @@ local defaults = {
   get_bufnrs = function()
     return { vim.api.nvim_get_current_buf() }
   end,
-  indexing_chunk_size = 1000,
+  indexing_batch_size = 1000,
   indexing_interval = 100,
 }
 
@@ -33,7 +33,7 @@ source._validate_options = function(_, params)
     keyword_length = { opts.keyword_length, 'number' },
     keyword_pattern = { opts.keyword_pattern, 'string' },
     get_bufnrs = { opts.get_bufnrs, 'function' },
-    indexing_chunk_size = { opts.indexing_chunk_size, 'number' },
+    indexing_batch_size = { opts.indexing_batch_size, 'number' },
     indexing_interval = { opts.indexing_interval, 'number' },
   })
   return opts
@@ -82,6 +82,7 @@ source.complete = function(self, params, callback)
 end
 
 ---@param opts cmp_buffer.Options
+---@return cmp_buffer.Buffer[]
 source._get_buffers = function(self, opts)
   local buffers = {}
   for _, bufnr in ipairs(opts.get_bufnrs()) do
