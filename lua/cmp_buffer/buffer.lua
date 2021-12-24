@@ -1,5 +1,11 @@
 local timer = require('cmp_buffer.timer')
 
+local function clear_table(tbl)
+  for k in pairs(tbl) do
+    tbl[k] = nil
+  end
+end
+
 ---@class cmp_buffer.Buffer
 ---@field public bufnr number
 ---@field public opts cmp_buffer.Options
@@ -271,10 +277,7 @@ function buffer.watch(self)
         return true
       end
 
-      -- clear all lines
-      for i = self.lines_count, 1, -1 do
-        self.lines_words[i] = nil
-      end
+      clear_table(self.lines_words)
 
       self:stop_indexing_timer()
       self:start_indexing_timer()
@@ -287,12 +290,6 @@ function buffer.watch(self)
       self:close()
     end,
   })
-end
-
-local function clear_table(tbl)
-  for k in pairs(tbl) do
-    tbl[k] = nil
-  end
 end
 
 ---@param linenr number
