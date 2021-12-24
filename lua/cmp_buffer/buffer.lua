@@ -163,10 +163,10 @@ function buffer.start_indexing_timer(self)
     if batch_end >= self.lines_count then
       self:stop_indexing_timer()
     end
-
-    self:index_range(batch_start, batch_end, true)
     self.timer_current_line = batch_end
     self:mark_all_lines_dirty()
+
+    self:index_range(batch_start, batch_end, true)
   end)
 end
 
@@ -257,9 +257,6 @@ function buffer.watch(self)
         end
       end
 
-      -- replace lines
-      self:index_range(first_line, new_last_line)
-
       if first_line == self.last_edit_first_line and old_last_line == self.last_edit_last_line and new_last_line == self.last_edit_last_line then
         self.unique_words_curr_line_dirty = true
       else
@@ -270,6 +267,9 @@ function buffer.watch(self)
       self.last_edit_last_line = new_last_line
 
       self.words_distances_dirty = true
+
+      -- replace lines
+      self:index_range(first_line, new_last_line)
     end,
 
     on_reload = function(_, _)
