@@ -4,6 +4,8 @@ local buffer = require('cmp_buffer.buffer')
 ---@field public keyword_length number
 ---@field public keyword_pattern string
 ---@field public get_bufnrs fun(): number[]
+---@field public indexing_batch_size number
+---@field public indexing_interval number
 
 ---@type cmp_buffer.Options
 local defaults = {
@@ -12,6 +14,8 @@ local defaults = {
   get_bufnrs = function()
     return { vim.api.nvim_get_current_buf() }
   end,
+  indexing_batch_size = 1000,
+  indexing_interval = 100,
 }
 
 local source = {}
@@ -29,6 +33,8 @@ source._validate_options = function(_, params)
     keyword_length = { opts.keyword_length, 'number' },
     keyword_pattern = { opts.keyword_pattern, 'string' },
     get_bufnrs = { opts.get_bufnrs, 'function' },
+    indexing_batch_size = { opts.indexing_batch_size, 'number' },
+    indexing_interval = { opts.indexing_interval, 'number' },
   })
   return opts
 end
@@ -44,7 +50,7 @@ source.complete = function(self, params, callback)
   local processing = false
   local bufs = self:_get_buffers(opts)
   for _, buf in ipairs(bufs) do
-    if buf.timer then
+    if buf.timer:is_active() then
       processing = true
       break
     end
@@ -76,6 +82,7 @@ source.complete = function(self, params, callback)
 end
 
 ---@param opts cmp_buffer.Options
+---@return cmp_buffer.Buffer[]
 source._get_buffers = function(self, opts)
   local buffers = {}
   for _, bufnr in ipairs(opts.get_bufnrs()) do
@@ -84,7 +91,7 @@ source._get_buffers = function(self, opts)
       new_buf.on_close_cb = function()
         self.buffers[bufnr] = nil
       end
-      new_buf:index()
+      new_buf:start_indexing_timer()
       new_buf:watch()
       self.buffers[bufnr] = new_buf
     end
