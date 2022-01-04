@@ -113,14 +113,21 @@ end
 
 _Default:_ `100`
 
-Advanced option. See the section [Indexing](#indexing).
+Optimization option. See the section [Indexing](#indexing-and-how-to-optimize-it).
 
 
 ### indexing_batch_size (type: number)
 
 _Default:_ `1000`
 
-Advanced option. See the section [Indexing](#indexing).
+Optimization option. See the section [Indexing](#indexing-and-how-to-optimize-it).
+
+
+### max_indexed_line_length (type: number)
+
+_Default:_ `1024 * 40` (40 Kilobytes)
+
+Optimization option. See the section [Indexing](#indexing-and-how-to-optimize-it).
 
 
 ## Locality bonus comparator (distance-based sorting)
@@ -149,7 +156,7 @@ cmp.setup({
 ```
 
 
-## Indexing
+## Indexing and how to optimize it
 
 When a buffer is opened, this source first has to scan all lines in the buffer, match all words
 and store all of their occurrences. This process is called _indexing_. When actually editing the
@@ -174,15 +181,17 @@ the indexer to the "synchronous" mode: this will process all lines in one go, ta
 total (since no other code will be running on the Lua thread), but with the obvious downside that
 the editor UI will be blocked.
 
+The option `max_indexed_line_length` controls plugin's behavior in files with very long lines.
+This is known to slow this source down significantly (see issue [#13](https://github.com/hrsh7th/cmp-buffer/issues/13)),
+so by default it will take only the first few kilobytes of the line it is currently on. In other
+words, very long lines are not ignored, but only a part of them is indexed.
+
 ### Performance on large text files
 
 This source has been tested on code files of a few megabytes in size (5-10) and contains
 optimizations for them, however, the indexed words can still take up tens of megabytes of RAM if
-the file is large. It also currently has troubles on files with very long lines, see issue
-[#13](https://github.com/hrsh7th/cmp-buffer/issues/13).
-
-So, if you wish to avoid accidentally running this source on big files, you can tweak
-`get_bufnrs`, for example like this:
+the file is large. So, if you wish to avoid accidentally running this source on big files, you
+can tweak `get_bufnrs`, for example like this:
 
 ```lua
 get_bufnrs = function()

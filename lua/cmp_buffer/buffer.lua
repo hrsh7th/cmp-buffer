@@ -305,6 +305,16 @@ function buffer.index_line(self, linenr, line)
   local word_i = 1
 
   local remaining = line
+  -- The if statement checks the number of bytes in the line string, but slices
+  -- it on the number of characters. This is not a problem because the number
+  -- of characters is always equal to (if only ASCII characters are used) or
+  -- smaller than (if multibyte Unicode characters are used) the number of bytes.
+  -- In other words, if the line contains more characters than the max limit,
+  -- then it will always contain more bytes than the same limit.
+  -- This check is here because calling a Vimscript function is relatively slow.
+  if #remaining > self.opts.max_indexed_line_length then
+    remaining = vim.fn.strcharpart(line, 0, self.opts.max_indexed_line_length)
+  end
   while #remaining > 0 do
     -- NOTE: Both start and end indexes here are 0-based (unlike Lua strings),
     -- and the end index is not inclusive.

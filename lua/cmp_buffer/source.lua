@@ -6,6 +6,7 @@ local buffer = require('cmp_buffer.buffer')
 ---@field public get_bufnrs fun(): number[]
 ---@field public indexing_batch_size number
 ---@field public indexing_interval number
+---@field public max_indexed_line_length number
 
 ---@type cmp_buffer.Options
 local defaults = {
@@ -16,6 +17,7 @@ local defaults = {
   end,
   indexing_batch_size = 1000,
   indexing_interval = 100,
+  max_indexed_line_length = 1024 * 40,
 }
 
 local source = {}
