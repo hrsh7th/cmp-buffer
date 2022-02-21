@@ -34,7 +34,7 @@ cmp.setup({
 
 _Default:_ `3`
 
-Specify word length to gather.
+The number of characters that need to be typed to trigger auto-completion.
 
 
 ### keyword_pattern (type: string)
