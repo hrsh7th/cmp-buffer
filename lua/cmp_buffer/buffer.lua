@@ -13,7 +13,7 @@ end
 ---@field public timer cmp_buffer.Timer
 ---@field public lines_count number
 ---@field public timer_current_line number
----@field public lines_words table<number, string[]>
+---@field public lines_words table<number, false|string[]>
 ---@field public unique_words_curr_line table<string, boolean>
 ---@field public unique_words_other_lines table<string, boolean>
 ---@field public unique_words_curr_line_dirty boolean
@@ -215,7 +215,7 @@ function buffer.watch(self)
         -- (which is why I am concerned about preallocation). Why is there no
         -- built-in function to do this in Lua???
         for i = old_lines_count + 1, new_lines_count do
-          self.lines_words[i] = vim.NIL
+          self.lines_words[i] = false
         end
         -- Move forwards the unchanged elements in the tail part.
         for i = old_lines_count, old_last_line + 1, -1 do
