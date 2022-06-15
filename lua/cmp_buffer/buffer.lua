@@ -14,6 +14,8 @@ end
 ---@field public lines_count number
 ---@field public timer_current_line number
 ---@field public lines_words table<number, false|string[]>
+---@field public queue table<number, boolean>
+---@field public debounce_timer cmp_buffer.Timer|nil
 ---@field public unique_words_curr_line table<string, boolean>
 ---@field public unique_words_other_lines table<string, boolean>
 ---@field public unique_words_curr_line_dirty boolean
@@ -50,6 +52,11 @@ function buffer.new(bufnr, opts)
   self.timer_current_line = -1
   self.lines_words = {}
 
+  self.queue = {}
+  if self.opts.debounce > 0 then
+    self.debounce_timer = timer.new()
+  end
+
   self.unique_words_curr_line = {}
   self.unique_words_other_lines = {}
   self.unique_words_curr_line_dirty = true
@@ -74,6 +81,12 @@ function buffer.close(self)
   self.lines_count = 0
   self.timer_current_line = -1
   self.lines_words = {}
+
+  self.queue = {}
+  if self.debounce_timer then
+    self.debounce_timer:close()
+    self.debounce_timer = nil
+  end
 
   self.unique_words_curr_line = {}
   self.unique_words_other_lines = {}
@@ -174,14 +187,12 @@ end
 function buffer.watch(self)
   self.lines_count = vim.api.nvim_buf_line_count(self.bufnr)
 
-  -- NOTE: As far as I know, indexing in watching can't be done asynchronously
-  -- because even built-in commands generate multiple consequent `on_lines`
-  -- events, and I'm not even mentioning plugins here. To get accurate results
-  -- we would have to either re-index the entire file on throttled events (slow
-  -- and looses the benefit of on_lines watching), or put the events in a
-  -- queue, which would complicate the plugin a lot. Plus, most changes which
-  -- trigger this event will be from regular editing, and so 99% of the time
-  -- they will affect only 1-2 lines.
+  -- NOTE: Indexing in watching can't be done asynchronously because many
+  -- editing commands generate multiple `on_lines` events for a single edit. To
+  -- get accurate results, the indexer should re-index the changed lines on
+  -- each event. This can be optimized by debouncing the indexer. On each
+  -- event, we mark the lines to be re-indexed, and run the indexer when we
+  -- don't receive events for a while.
   vim.api.nvim_buf_attach(self.bufnr, false, {
     -- NOTE: line indexes are 0-based and the last line is not inclusive.
     on_lines = function(_, _, _, first_line, old_last_line, new_last_line, _, _, _)
@@ -201,7 +212,7 @@ function buffer.watch(self)
       local new_lines_count = old_lines_count + delta
       if new_lines_count == 0 then -- clear
         -- This branch protects against bugs after full-file deletion. If you
-        -- do, for example, gdGG, the new_last_line of the event will be zero.
+        -- do, for example, ggdG, the new_last_line of the event will be zero.
         -- Which is not true, a buffer always contains at least one empty line,
         -- only unloaded buffers contain zero lines.
         new_lines_count = 1
@@ -209,6 +220,7 @@ function buffer.watch(self)
           self.lines_words[i] = nil
         end
         self.lines_words[1] = {}
+        self.queue = {}
       elseif delta > 0 then -- append
         -- Explicitly reserve more slots in the array part of the lines table,
         -- all of them will be filled in the next loop, but in reverse order
@@ -220,6 +232,7 @@ function buffer.watch(self)
         -- Move forwards the unchanged elements in the tail part.
         for i = old_lines_count, old_last_line + 1, -1 do
           self.lines_words[i + delta] = self.lines_words[i]
+          self.queue[i + delta] = self.queue[i]
         end
         -- Fill in new tables for the added lines.
         for i = old_last_line + 1, new_last_line do
@@ -229,11 +242,13 @@ function buffer.watch(self)
         -- Move backwards the unchanged elements in the tail part.
         for i = old_last_line + 1, old_lines_count do
           self.lines_words[i + delta] = self.lines_words[i]
+          self.queue[i + delta] = self.queue[i]
         end
         -- Remove (already copied) tables from the end, in reverse order, so
         -- that we don't make holes in the lines table.
         for i = old_lines_count, new_lines_count + 1, -1 do
           self.lines_words[i] = nil
+          self.queue[i] = nil
         end
       end
       self.lines_count = new_lines_count
@@ -269,7 +284,21 @@ function buffer.watch(self)
       self.words_distances_dirty = true
 
       -- replace lines
-      self:index_range(first_line, new_last_line)
+      if self.debounce_timer then
+        for i = first_line + 1, new_last_line do
+          self.queue[i] = true
+        end
+        self.debounce_timer:stop()
+        self.debounce_timer:start(self.opts.debounce, 0, vim.schedule_wrap(function()
+          self:safe_buf_call(function()
+            for linenr, _ in pairs(self.queue) do
+              self:index_line(linenr, vim.api.nvim_buf_get_lines(self.bufnr, linenr - 1, linenr, true)[1])
+            end
+          end)
+        end))
+      else
+        self:index_range(first_line, new_last_line)
+      end
     end,
 
     on_reload = function(_, _)
@@ -302,6 +331,7 @@ function buffer.index_line(self, linenr, line)
   else
     clear_table(words)
   end
+  self.queue[linenr] = nil
   local word_i = 1
 
   local remaining = line
