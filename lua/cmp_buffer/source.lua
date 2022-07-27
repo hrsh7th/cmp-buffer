@@ -87,7 +87,8 @@ end
 ---@return cmp_buffer.Buffer[]
 source._get_buffers = function(self, opts)
   local buffers = {}
-  for _, bufnr in ipairs(opts.get_bufnrs()) do
+  local bufnrs = opts.get_bufnrs()
+  for _, bufnr in ipairs(bufnrs) do
     if not self.buffers[bufnr] then
       local new_buf = buffer.new(bufnr, opts)
       new_buf.on_close_cb = function()
@@ -98,6 +99,21 @@ source._get_buffers = function(self, opts)
       self.buffers[bufnr] = new_buf
     end
     table.insert(buffers, self.buffers[bufnr])
+  end
+
+  -- close buffers not returned by get_bufnrs
+  for bufnr, buf in pairs(self.buffers) do
+    local match_found = false
+    for _, bufnr2 in ipairs(bufnrs) do
+      if bufnr == bufnr2 then
+        match_found = true
+        break
+      end
+    end
+    if not match_found then
+      -- this will remove from self.buffers through on_close_cb callback
+      buf.close()
+    end
   end
 
   return buffers
