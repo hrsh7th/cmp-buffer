@@ -18,6 +18,7 @@ local defaults = {
   indexing_batch_size = 1000,
   indexing_interval = 100,
   max_indexed_line_length = 1024 * 40,
+  debounce = 400,
 }
 
 local source = {}
