@@ -86,6 +86,8 @@ _Default:_ `function() return { vim.api.nvim_get_current_buf() } end`
 
 A function that specifies the buffer numbers to complete.
 
+**NOTE:** If using this, make sure you have `set hidden`, otherwise it will not work correctly.
+
 You can use the following pre-defined recipes.
 
 ##### All buffers
