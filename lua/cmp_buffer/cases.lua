@@ -1,3 +1,4 @@
+-- slice a word to individual slices. "my_cool_word" -> { "my", "cool", "word" }
 function get_word_slices(name)
   local slices = {}
   local current_word = ""
@@ -36,6 +37,7 @@ function get_word_slices(name)
   return slices
 end
 
+-- e.g. my_cool_word
 function snake_case(slices)
   local word = ""
 
@@ -50,6 +52,7 @@ function snake_case(slices)
   return word
 end
 
+-- e.g. my-cool-word
 function kebab_case(slices)
   local word = ""
 
@@ -64,6 +67,7 @@ function kebab_case(slices)
   return word
 end
 
+-- e.g. myCoolWord
 function camel_case(slices)
   local word = ""
 
@@ -79,6 +83,7 @@ function camel_case(slices)
   return word
 end
 
+-- e.g. MyCoolWord
 function pascal_case(slices)
   local word = ""
 
@@ -90,6 +95,7 @@ function pascal_case(slices)
   return word
 end
 
+-- e.g. MY_COOL_WORD
 function macro_case(slices)
   local word = ""
 
@@ -104,6 +110,7 @@ function macro_case(slices)
   return word
 end
 
+-- lookup table for all cases that are suppored out of the box
 return {
   ["snake"] = snake_case,
   ["camel"] = camel_case,
