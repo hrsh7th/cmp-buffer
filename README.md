@@ -39,7 +39,7 @@ The number of characters that need to be typed to trigger auto-completion.
 
 ### keyword_pattern (type: string)
 
-_Default:_ `[[\%(-\?\d\+\%(\.\d\+\)\?\|\h\w*\%([\-.]\w*\)*\)]]`
+_Default:_ `[[\%(-\?\d\+\%(\.\d\+\)\?\|\h\%(\w\|á\|Á\|é\|É\|í\|Í\|ó\|Ó\|ú\|Ú\)*\%(-\%(\w\|á\|Á\|é\|É\|í\|Í\|ó\|Ó\|ú\|Ú\)*\)*\)]]`
 
 A vim's regular expression for creating a word list from buffer content.
 
