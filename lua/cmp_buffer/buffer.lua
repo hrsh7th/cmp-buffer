@@ -312,8 +312,10 @@ function buffer.index_line(self, linenr, line)
   -- In other words, if the line contains more characters than the max limit,
   -- then it will always contain more bytes than the same limit.
   -- This check is here because calling a Vimscript function is relatively slow.
+  local sliced = false
   if #remaining > self.opts.max_indexed_line_length then
     remaining = vim.fn.strcharpart(line, 0, self.opts.max_indexed_line_length)
+    sliced = true
   end
   while #remaining > 0 do
     -- NOTE: Both start and end indexes here are 0-based (unlike Lua strings),
@@ -329,6 +331,13 @@ function buffer.index_line(self, linenr, line)
     else
       break
     end
+  end
+  -- The last indexed word may not be an actual word if the line is sliced at
+  -- the middle of a word. Remove it to avoid polluting the index. Note that
+  -- this may remove an actual word, but this is ok since we've already
+  -- compromised completeness of the index of long lines.
+  if sliced and word_i > 1 then
+    words[word_i - 1] = nil
   end
 end
 
