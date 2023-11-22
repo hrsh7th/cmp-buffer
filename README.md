@@ -127,6 +127,38 @@ cmp.setup {
 
 ```
 
+##### Git repository buffers
+
+```lua
+cmp.setup {
+  sources = {
+    {
+      name = 'buffer',
+      option = {
+        -- all buffers for files in the current git repository
+        get_bufnrs = function()
+          local bufs = {}
+          local out = vim.fn.system("git rev-parse --show-toplevel")
+          if vim.v.shell_error ~= 0 then -- use only current buffer if not in git repo
+            table.insert(bufs, vim.api.nvim_get_current_buf())
+          else
+            local rootdir = string.sub(out, 1, -2)
+            for _, buf in pairs(vim.api.nvim_list_bufs()) do
+
+              local filename = vim.api.nvim_buf_get_name(buf)
+              if filename:find(rootdir, 1, true) == 1 then
+                table.insert(bufs, buf)
+              end
+            end
+          end
+          return bufs
+        end
+      }
+    }
+  }
+}
+
+```
 
 ### indexing_interval (type: number)
 
