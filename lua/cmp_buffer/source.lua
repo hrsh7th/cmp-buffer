@@ -7,6 +7,7 @@ local buffer = require('cmp_buffer.buffer')
 ---@field public indexing_batch_size number
 ---@field public indexing_interval number
 ---@field public max_indexed_line_length number
+---@field public show_source boolean
 
 ---@type cmp_buffer.Options
 local defaults = {
@@ -18,6 +19,7 @@ local defaults = {
   indexing_batch_size = 1000,
   indexing_interval = 100,
   max_indexed_line_length = 1024 * 40,
+  show_source = false,
 }
 
 local source = {}
@@ -37,6 +39,7 @@ source._validate_options = function(_, params)
     get_bufnrs = { opts.get_bufnrs, 'function' },
     indexing_batch_size = { opts.indexing_batch_size, 'number' },
     indexing_interval = { opts.indexing_interval, 'number' },
+    show_source = { opts.show_source, 'boolean' },
   })
   return opts
 end
@@ -70,6 +73,10 @@ source.complete = function(self, params, callback)
             table.insert(items, {
               label = word,
               dup = 0,
+              labelDetails = opts.show_source and {
+                description = buf:description(true),
+              },
+              detail = opts.show_source and buf:description(),
             })
           end
         end

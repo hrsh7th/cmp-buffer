@@ -377,4 +377,16 @@ function buffer.get_words_distances(self, cursor_row)
   return self.words_distances
 end
 
+--@return name of buffer (maybe shortened), if file, otherwise buffer number
+function buffer.description(self, short)
+  local name = vim.fn.bufname(self.bufnr)
+  if name then
+    if short then
+      return name:match("[^/]*$")
+    end
+    return name
+  end
+  return ("<buf %d>"):format(self.bufnr)
+end
+
 return buffer
