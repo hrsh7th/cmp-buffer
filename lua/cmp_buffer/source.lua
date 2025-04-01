@@ -1,4 +1,5 @@
 local buffer = require('cmp_buffer.buffer')
+local case_lookup = require('cmp_buffer.cases')
 
 ---@class cmp_buffer.Options
 ---@field public keyword_length number
@@ -7,6 +8,7 @@ local buffer = require('cmp_buffer.buffer')
 ---@field public indexing_batch_size number
 ---@field public indexing_interval number
 ---@field public max_indexed_line_length number
+---@field public cases table
 
 ---@type cmp_buffer.Options
 local defaults = {
@@ -18,6 +20,7 @@ local defaults = {
   indexing_batch_size = 1000,
   indexing_interval = 100,
   max_indexed_line_length = 1024 * 40,
+  cases = {},
 }
 
 local source = {}
@@ -37,6 +40,7 @@ source._validate_options = function(_, params)
     get_bufnrs = { opts.get_bufnrs, 'function' },
     indexing_batch_size = { opts.indexing_batch_size, 'number' },
     indexing_interval = { opts.indexing_interval, 'number' },
+    cases = { opts.cases, 'table' },
   })
   return opts
 end
@@ -71,6 +75,33 @@ source.complete = function(self, params, callback)
               label = word,
               dup = 0,
             })
+
+            if opts.cases ~= {} then
+              local slices = get_word_slices(word)
+
+              for _, case in ipairs(opts.cases) do
+                local new_word
+
+                if type(case) == "function" then
+                  new_word = case(slices)
+                else
+                  local converter = case_lookup[case]
+                  if converter ~= nil then
+                    new_word = converter(slices)
+                  end
+                end
+
+                if type(new_word) == "string" then
+                  if not words[new_word] then
+                    words[new_word] = true
+                    table.insert(items, {
+                      label = new_word,
+                      dup = 0,
+                    })
+                  end
+                end
+              end
+            end
           end
         end
       end
