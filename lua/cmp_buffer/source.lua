@@ -31,11 +31,13 @@ end
 ---@return cmp_buffer.Options
 source._validate_options = function(_, params)
   local opts = vim.tbl_deep_extend('keep', params.option, defaults)
-  vim.validate('keyword_length', opts.keyword_length, 'number')
-  vim.validate('keyword_pattern', opts.keyword_pattern, 'string')
-  vim.validate('get_bufnrs', opts.get_bufnrs, 'function')
-  vim.validate('indexing_batch_size', opts.indexing_batch_size, 'number')
-  vim.validate('indexing_interval', opts.indexing_interval, 'number')
+  vim.validate({
+    keyword_length = { opts.keyword_length, 'number' },
+    keyword_pattern = { opts.keyword_pattern, 'string' },
+    get_bufnrs = { opts.get_bufnrs, 'function' },
+    indexing_batch_size = { opts.indexing_batch_size, 'number' },
+    indexing_interval = { opts.indexing_interval, 'number' },
+  })
   return opts
 end
 
